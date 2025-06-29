@@ -1,0 +1,9 @@
+# ignore simulation & IDE files
+*.vcd
+*.out
+*.log
+*.hex
+*.bin
+*.exe
+*.class
+.vscode/
