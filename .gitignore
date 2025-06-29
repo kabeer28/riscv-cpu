@@ -1,4 +1,5 @@
 # ignore simulation & IDE files
+*.DS_Store
 *.vcd
 *.out
 *.log
