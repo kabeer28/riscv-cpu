@@ -31,7 +31,25 @@ Assembly programs are written in [RARS](https://github.com/TheThirdOne/rars) and
 
 ---
 
-<pre><code>## 🗂️ Project Structure ``` riscv_cpu/ ├── src/ # Verilog source files (alu.v, regfile.v, pc.v, instr_mem.v, top.v) ├── test/ # Testbenches │ ├── tb_alu.v │ ├── tb_pc.v ├── hex/ # Exported machine code from RARS │ └── program.hex ├── README.md └── .gitignore ``` </code></pre>
+## 🗂️ Project Structure
+
+```
+riscv_cpu/
+├── src/ 	     # verilog src files
+|   ├── alu.v
+│   ├── regfile.v
+│   ├── pc.v
+│   ├── instr_mem.v
+│   └── top.v	 
+├── test/            # testbenches
+│   ├── tb_alu.v
+│   └── tb_pc.v
+├── hex/             
+│   └── program.hex  # exported machine code from RARS
+├── README.md
+└── .gitignore
+```
+
 
 ---
 
