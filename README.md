@@ -1,6 +1,8 @@
-# RISC-V Pipelined CPU (in Verilog)
+# NOVA-1: RISC-V CPU (in Verilog)
 
-This project is a 32-bit RISC-V CPU built from scratch in Verilog. It's designed to support the RV32I instruction set and is being built step-by-step, starting with a single-cycle CPU, and progressing toward a fully pipelined processor.
+NOVA-1 is a 32-bit RISC-V CPU built from scratch in Verilog. It's designed to support the RV32I instruction set and is being built step-by-step, starting with a single-cycle CPU, and progressing toward a fully pipelined processor.
+
+NOVA-1 represents the first step in building a custom, next-generation RISC-V CPU from the ground up.
 
 ---
 
@@ -32,9 +34,17 @@ Assembly programs are written in [RARS](https://github.com/TheThirdOne/rars) and
 ## 📁 Project Structure
 
 riscv_cpu/
-├── src/ # Verilog modules (ALU, regfile, pc, etc.)
-├── test/ # Testbenches
-├── test/hex/ # Assembled .hex files from RARS
+├── src
+│   ├── alu.v
+│   ├── regfile.v
+│   ├── pc.v
+│   ├── instr_mem.v
+│   └── top.v
+├── test
+│   ├── tb_alu.v
+│   ├── tb_pc.v
+│   └── hex
+│       └── program.hex   # exported machine code from RARS
 ├── README.md
 └── .gitignore
 
