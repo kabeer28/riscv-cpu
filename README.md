@@ -65,4 +65,4 @@ riscv_cpu/
 
 ## 💻 Contact
 
-Kabeer Makkar – [@kabeermakkar](https://github.com/kabeermakkar)
+Kabeer Makkar – [@kabeer28](https://github.com/kabeer28)
