@@ -9,7 +9,7 @@ module tb_top;
 
   initial begin
     $dumpfile("wave.vcd");
-    $dumpvars(0, tb_top);
+    $dumpvars(0, uut);
     reset = 1; #10; reset = 0;
     #100;
     $finish;

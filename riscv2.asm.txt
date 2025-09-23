@@ -1,0 +1,6 @@
+    addi x5, x0, 5      # x5 = 5
+    addi x6, x0, 5      # x6 = 5
+    beq  x5, x6, label  # branch if equal → should be taken
+    addi x7, x0, 1      # skipped if branch works
+label:
+    addi x7, x0, 42     # executed if branch works
