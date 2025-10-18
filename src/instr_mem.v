@@ -7,6 +7,6 @@ module instr_mem (
     assign instruction = memory[addr[9:2]]; // divide PC by 4 (right shift 2) to get index
 
     initial begin
-        $readmemh("test/hex/add.hex", memory); // load instructions from file
+        $readmemh("test/hex/branch.hex", memory); // load instructions from da branch file
     end
 endmodule
