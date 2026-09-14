@@ -1,68 +1,81 @@
-# NOVA-1: RISC-V CPU (in Verilog)
+# NOVA-1
 
-NOVA-1 is a 32-bit RISC-V CPU built from scratch in Verilog. It's designed to support the RV32I instruction set and is being built step-by-step, starting with a single-cycle CPU, and progressing toward a fully pipelined processor.
+NOVA-1 is a five-stage, 32-bit RISC-V processor written in Verilog. The current
+core implements a verified RV32I subset and focuses on the pipeline mechanics:
+forwarding, load-use stalls, control-hazard recovery, memory access, and
+writeback.
 
-NOVA-1 represents the first step in building a custom, next-generation RISC-V CPU from the ground up.
+## Pipeline
 
----
-
-## ✅ Features (Completed)
-
-- ALU with arithmetic, logic, shift, and compare support
-- Register file with two read ports and one write port
-- Program Counter module with reset and stall control
-- Instruction memory module that loads `.hex` files generated from RARS
-- Modular codebase for reusability and scalability
-
----
-
-## 🛠️ In Progress
-
-- 5-stage pipelined datapath (IF, ID, EX, MEM, WB)
-- Branch prediction (2-bit saturating counter)
-- Hazard detection and data forwarding
-- UART output to send results from CPU to PC
-
----
-
-## 🧪 Test Programs
-
-Assembly programs are written in [RARS](https://github.com/TheThirdOne/rars) and exported as `.hex` machine code. These are loaded into the CPU’s instruction memory for simulation.
-
----
-
-## 🗂️ Project Structure
-
-```
-riscv_cpu/
-├── src/ 	     # verilog src files
-|   ├── alu.v
-│   ├── regfile.v
-│   ├── pc.v
-│   ├── instr_mem.v
-│   └── top.v	 
-├── test/            # testbenches
-│   ├── tb_alu.v
-│   └── tb_pc.v
-├── hex/             
-│   └── program.hex  # exported machine code from RARS
-├── README.md
-└── .gitignore
+```text
+IF -> ID -> EX -> MEM -> WB
 ```
 
+- EX/MEM and MEM/WB operand forwarding
+- One-cycle load-use interlock
+- Branch resolution in EX with IF/ID and ID/EX flushing
+- Separate 1 KiB instruction and data memories
+- Register `x0` hardwired to zero
 
----
+## Verified instructions
 
-## 🚀 Goals
+| Group | Instructions |
+| --- | --- |
+| Register ALU | `ADD`, `SUB`, `SLL`, `SLT`, `SLTU`, `XOR`, `SRL`, `SRA`, `OR`, `AND` |
+| Immediate ALU | `ADDI`, `SLLI`, `SLTI`, `SLTIU`, `XORI`, `SRLI`, `SRAI`, `ORI`, `ANDI` |
+| Memory | `LW`, `SW` |
+| Branch | `BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, `BGEU` |
 
-- ✅ Simulate instruction fetching using PC + instruction memory
-- 🔄 Implement full pipelined execution
-- 🔄 Support control flow instructions (jumps, branches)
-- 🔄 Add waveform output using GTKWave
-- 🔄 Synthesize on an FPGA (Nexys A7 or similar, maybe!)
+Unsupported encodings have no architectural side effects. The core does not yet
+claim full RV32I compatibility.
 
----
+## Test
 
-## 💻 Contact
+Install Icarus Verilog, then run:
 
-Kabeer Makkar – [@kabeer28](https://github.com/kabeer28)
+```bash
+make test
+```
+
+The tests are self-checking. The processor-level test runs one program that
+covers back-to-back ALU dependencies, forwarded store data, a load-use stall,
+taken and untaken branches, and signed branch comparison. GitHub Actions runs
+the same suite on every push and pull request.
+
+Generate a waveform for GTKWave with:
+
+```bash
+make trace
+gtkwave build/nova_trace.vcd
+```
+
+## Loading a program
+
+`top` and `instr_mem` accept a memory-file parameter. Pass a RARS-generated
+hex file when instantiating the processor:
+
+```verilog
+top #(.IMEM_FILE("program.hex")) cpu (
+    .clk(clk),
+    .reset(reset)
+);
+```
+
+When no file is supplied, instruction memory is initialized with RISC-V NOPs.
+
+## Remaining work
+
+- Complete RV32I with `LUI`, `AUIPC`, `JAL`, `JALR`, and byte/halfword memory operations
+- Add instruction-level differential tests against a reference model
+- Synthesize and close timing on an FPGA target
+- Add memory-mapped UART output
+- Evaluate a branch predictor only after collecting baseline branch metrics
+
+## Structure
+
+```text
+src/                  Processor RTL
+test/                 Self-checking testbenches
+.github/workflows/    Continuous integration
+Makefile              Simulation, lint, and trace commands
+```

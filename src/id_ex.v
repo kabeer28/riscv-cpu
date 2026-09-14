@@ -1,3 +1,6 @@
+`timescale 1ns / 1ps
+`default_nettype none
+
 module id_ex (
     input clk,
     input reset,
@@ -20,7 +23,6 @@ module id_ex (
     input [4:0] rs2_in,
     input [4:0] rd_in,
     input [2:0] funct3_in,
-    input [6:0] funct7_in,
     input [3:0] alu_ctrl_in,
 
     //outputs
@@ -40,7 +42,6 @@ module id_ex (
     output reg [4:0] rs2_out,
     output reg [4:0] rd_out,
     output reg [2:0] funct3_out,
-    output reg [6:0] funct7_out,
     output reg [3:0] alu_ctrl_out
 );
 
@@ -62,7 +63,6 @@ module id_ex (
             rs2_out        <= 0;
             rd_out         <= 0;
             funct3_out     <= 0;
-            funct7_out     <= 0;
             alu_ctrl_out   <= 0;
         end else begin
             regwrite_out   <= regwrite_in;
@@ -81,8 +81,9 @@ module id_ex (
             rs2_out        <= rs2_in;
             rd_out         <= rd_in;
             funct3_out     <= funct3_in;
-            funct7_out     <= funct7_in;
             alu_ctrl_out   <= alu_ctrl_in;
         end
     end
 endmodule
+
+`default_nettype wire

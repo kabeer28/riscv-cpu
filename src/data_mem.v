@@ -1,4 +1,5 @@
 `timescale 1ns/1ps
+`default_nettype none
 // Simple word-addressed data memory: supports lw/sw (funct3=010).
 module data_mem (
     input  wire        clk,
@@ -10,6 +11,12 @@ module data_mem (
 );
     // 1 KB = 256 words (adjust as you like)
     reg [31:0] dmem [0:255];
+    integer i;
+
+    initial begin
+        for (i = 0; i < 256; i = i + 1)
+            dmem[i] = 32'b0;
+    end
 
     // Combinational read (word-aligned)
     always @(*) begin
@@ -25,3 +32,5 @@ module data_mem (
             dmem[addr[9:2]] <= writedata;
     end
 endmodule
+
+`default_nettype wire

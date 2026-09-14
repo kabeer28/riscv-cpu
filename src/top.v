@@ -1,273 +1,291 @@
 `timescale 1ns / 1ps
+`default_nettype none
 
-module top (
+module top #(
+    parameter IMEM_FILE = ""
+) (
     input wire clk,
     input wire reset
 );
-    // 
-    // stage 1: instruction fetch (IF)
-    // 
+    localparam OP_IMM = 7'b0010011;
+    localparam OP     = 7'b0110011;
+    localparam LOAD   = 7'b0000011;
+    localparam STORE  = 7'b0100011;
+    localparam BRANCH = 7'b1100011;
 
-    wire [31:0] pc_out, pc_next, instruction;
-    wire pc_write = 1'b1;
+    localparam ALU_AND  = 4'b0000;
+    localparam ALU_OR   = 4'b0001;
+    localparam ALU_ADD  = 4'b0010;
+    localparam ALU_SUB  = 4'b0110;
+    localparam ALU_SLT  = 4'b0111;
+    localparam ALU_XOR  = 4'b1000;
+    localparam ALU_SLL  = 4'b1001;
+    localparam ALU_SRL  = 4'b1010;
+    localparam ALU_SRA  = 4'b1011;
+    localparam ALU_SLTU = 4'b1100;
 
-    assign pc_next = pc_out + 32'd4;
-
-    pc u_pc (
-        .clk(clk),
-        .reset(reset),
-        .pc_write(pc_write),
-        .pc_in(pc_next),
-        .pc_out(pc_out)
-    );
-
-    instr_mem u_imem (
-        .addr(pc_out),
-        .instruction(instruction)
-    );
-
-    // IF/ID pipeline register
+    wire [31:0] pc_out, pc_plus4, pc_next, instruction;
+    wire hazard_pc_write, pc_write, if_id_write, if_id_flush;
 
     wire [31:0] if_id_pc, if_id_instruction;
+    wire [6:0] opcode, funct7;
+    wire [4:0] rd, rs1, rs2;
+    wire [2:0] funct3;
+    wire [31:0] imm_i, imm_s, imm_b, alu_imm;
+    wire [31:0] rs1_data, rs2_data;
+    reg regwrite, memread, memwrite, memtoreg, branch, alu_src_imm;
+    reg [3:0] alu_ctrl;
+    reg uses_rs1, uses_rs2;
+    wire control_stall, kill_controls;
+
+    wire [31:0] id_ex_pc, id_ex_rs1_data, id_ex_rs2_data;
+    wire [31:0] id_ex_imm_i, id_ex_imm_b;
+    wire [4:0] id_ex_rd, id_ex_rs1, id_ex_rs2;
+    wire [2:0] id_ex_funct3;
+    wire [3:0] id_ex_alu_ctrl;
+    wire id_ex_regwrite, id_ex_memread, id_ex_memwrite;
+    wire id_ex_memtoreg, id_ex_branch, id_ex_alu_src_imm;
+    wire [1:0] forward_a, forward_b;
+    reg [31:0] forwarded_rs1, forwarded_rs2;
+    wire [31:0] alu_b, alu_result;
+    reg branch_condition;
+    wire branch_taken;
+    wire [31:0] branch_target;
+
+    wire [31:0] ex_mem_alu_result, ex_mem_rs2_data;
+    wire [4:0] ex_mem_rd;
+    wire ex_mem_regwrite, ex_mem_memread, ex_mem_memwrite, ex_mem_memtoreg;
+    wire [31:0] mem_read_data;
+
+    wire [31:0] mem_wb_read_data_out, mem_wb_alu_result_out;
+    wire [4:0] mem_wb_rd_out;
+    wire mem_wb_regwrite_out, mem_wb_memtoreg_out;
+    wire [31:0] writeback_data;
+
+    assign pc_plus4    = pc_out + 32'd4;
+    assign pc_next     = branch_taken ? branch_target : pc_plus4;
+    assign pc_write    = hazard_pc_write | branch_taken;
+    assign if_id_flush = branch_taken;
+
+    pc u_pc (
+        .clk(clk), .reset(reset), .pc_write(pc_write),
+        .pc_in(pc_next), .pc_out(pc_out)
+    );
+
+    instr_mem #(.MEM_FILE(IMEM_FILE)) u_imem (
+        .addr(pc_out), .instruction(instruction)
+    );
 
     if_id u_if_id (
-        .clk(clk),
-        .reset(reset),
-        .pc_in(pc_out),
-        .instruction_in(instruction),
-        .pc_out(if_id_pc),
+        .clk(clk), .reset(reset), .if_id_write(if_id_write),
+        .if_id_flush(if_id_flush), .pc_in(pc_out),
+        .instruction_in(instruction), .pc_out(if_id_pc),
         .instruction_out(if_id_instruction)
     );
 
-    // 
-    // stage 2: instruction decode (ID)
-    // 
-
-    wire [6:0] opcode = if_id_instruction[6:0];
-    wire [4:0] rd     = if_id_instruction[11:7];
-    wire [2:0] funct3 = if_id_instruction[14:12];
-    wire [4:0] rs1    = if_id_instruction[19:15];
-    wire [4:0] rs2    = if_id_instruction[24:20];
-    wire [6:0] funct7 = if_id_instruction[31:25];
-
-    wire [31:0] imm_i = {{20{if_id_instruction[31]}}, if_id_instruction[31:20]};
-    wire [31:0] imm_b = {{19{if_id_instruction[31]}}, if_id_instruction[31],
-                          if_id_instruction[7], if_id_instruction[30:25],
-                          if_id_instruction[11:8], 1'b0};
-
-    //control signals
-    reg regwrite, memread, memwrite, memtoreg, branch, alu_src_imm;
-    reg [3:0] alu_ctrl;
-
-    localparam OP_IMM = 7'b0010011; // I-type
-    localparam OP     = 7'b0110011; // R-type
-    localparam LOAD   = 7'b0000011; // LW
-    localparam STORE  = 7'b0100011; // SW
-    localparam BRANCH = 7'b1100011; // BEQ, BNE, BLT
-
-    localparam ALU_ADD = 4'b0010;
-    localparam ALU_SUB = 4'b0110;
-    localparam ALU_SLT = 4'b0111;
+    assign opcode = if_id_instruction[6:0];
+    assign rd      = if_id_instruction[11:7];
+    assign funct3  = if_id_instruction[14:12];
+    assign rs1     = if_id_instruction[19:15];
+    assign rs2     = if_id_instruction[24:20];
+    assign funct7  = if_id_instruction[31:25];
+    assign imm_i   = {{20{if_id_instruction[31]}}, if_id_instruction[31:20]};
+    assign imm_s   = {{20{if_id_instruction[31]}}, if_id_instruction[31:25],
+                      if_id_instruction[11:7]};
+    assign imm_b   = {{19{if_id_instruction[31]}}, if_id_instruction[31],
+                      if_id_instruction[7], if_id_instruction[30:25],
+                      if_id_instruction[11:8], 1'b0};
+    assign alu_imm = (opcode == STORE) ? imm_s : imm_i;
 
     always @(*) begin
-        //defaults
-        regwrite = 0; memread = 0; memwrite = 0;
-        memtoreg = 0; branch = 0; alu_src_imm = 0; alu_ctrl = ALU_ADD;
+        regwrite = 1'b0;
+        memread = 1'b0;
+        memwrite = 1'b0;
+        memtoreg = 1'b0;
+        branch = 1'b0;
+        alu_src_imm = 1'b0;
+        alu_ctrl = ALU_ADD;
+        uses_rs1 = 1'b0;
+        uses_rs2 = 1'b0;
 
         case (opcode)
-            OP_IMM: begin // ADDI
-                if (funct3 == 3'b000) begin
-                    regwrite = 1;
-                    alu_src_imm = 1;
-                    alu_ctrl = ALU_ADD;
-                end
-            end
-            OP: begin // ADD/SUB
-                regwrite = 1;
-                case ({funct7, funct3})
-                    {7'b0000000, 3'b000}: alu_ctrl = ALU_ADD;
-                    {7'b0100000, 3'b000}: alu_ctrl = ALU_SUB;
-                    {7'b0000000, 3'b010}: alu_ctrl = ALU_SLT;
-                    default: alu_ctrl = ALU_ADD;
+            OP_IMM: begin
+                uses_rs1 = 1'b1;
+                alu_src_imm = 1'b1;
+                case (funct3)
+                    3'b000: begin regwrite = 1'b1; alu_ctrl = ALU_ADD;  end
+                    3'b010: begin regwrite = 1'b1; alu_ctrl = ALU_SLT;  end
+                    3'b011: begin regwrite = 1'b1; alu_ctrl = ALU_SLTU; end
+                    3'b100: begin regwrite = 1'b1; alu_ctrl = ALU_XOR;  end
+                    3'b110: begin regwrite = 1'b1; alu_ctrl = ALU_OR;   end
+                    3'b111: begin regwrite = 1'b1; alu_ctrl = ALU_AND;  end
+                    3'b001: if (funct7 == 7'b0000000) begin
+                        regwrite = 1'b1;
+                        alu_ctrl = ALU_SLL;
+                    end
+                    3'b101: if ((funct7 == 7'b0000000) || (funct7 == 7'b0100000)) begin
+                        regwrite = 1'b1;
+                        alu_ctrl = (funct7 == 7'b0100000) ? ALU_SRA : ALU_SRL;
+                    end
+                    default: begin end
                 endcase
             end
-            LOAD: begin // LW
-                regwrite = 1; memread = 1; memtoreg = 1; alu_src_imm = 1;
+            OP: begin
+                uses_rs1 = 1'b1;
+                uses_rs2 = 1'b1;
+                case ({funct7, funct3})
+                    {7'b0000000, 3'b000}: begin regwrite = 1'b1; alu_ctrl = ALU_ADD;  end
+                    {7'b0100000, 3'b000}: begin regwrite = 1'b1; alu_ctrl = ALU_SUB;  end
+                    {7'b0000000, 3'b001}: begin regwrite = 1'b1; alu_ctrl = ALU_SLL;  end
+                    {7'b0000000, 3'b010}: begin regwrite = 1'b1; alu_ctrl = ALU_SLT;  end
+                    {7'b0000000, 3'b011}: begin regwrite = 1'b1; alu_ctrl = ALU_SLTU; end
+                    {7'b0000000, 3'b100}: begin regwrite = 1'b1; alu_ctrl = ALU_XOR;  end
+                    {7'b0000000, 3'b101}: begin regwrite = 1'b1; alu_ctrl = ALU_SRL;  end
+                    {7'b0100000, 3'b101}: begin regwrite = 1'b1; alu_ctrl = ALU_SRA;  end
+                    {7'b0000000, 3'b110}: begin regwrite = 1'b1; alu_ctrl = ALU_OR;   end
+                    {7'b0000000, 3'b111}: begin regwrite = 1'b1; alu_ctrl = ALU_AND;  end
+                    default: begin end
+                endcase
             end
-            STORE: begin // SW
-                memwrite = 1; alu_src_imm = 1;
+            LOAD: begin
+                uses_rs1 = 1'b1;
+                if (funct3 == 3'b010) begin
+                    regwrite = 1'b1;
+                    memread = 1'b1;
+                    memtoreg = 1'b1;
+                    alu_src_imm = 1'b1;
+                end
             end
-            BRANCH: begin // BEQ, BNE, BLT
-                branch = 1; alu_ctrl = ALU_SUB;
+            STORE: begin
+                uses_rs1 = 1'b1;
+                uses_rs2 = 1'b1;
+                if (funct3 == 3'b010) begin
+                    memwrite = 1'b1;
+                    alu_src_imm = 1'b1;
+                end
             end
+            BRANCH: begin
+                uses_rs1 = 1'b1;
+                uses_rs2 = 1'b1;
+                case (funct3)
+                    3'b000, 3'b001, 3'b100, 3'b101, 3'b110, 3'b111: branch = 1'b1;
+                    default: branch = 1'b0;
+                endcase
+            end
+            default: begin end
         endcase
     end
 
-    // register file
-
-    wire [31:0] rs1_data, rs2_data;
-    wire [31:0] debug_x5, debug_x6, debug_x7;
-
     regfile u_regfile (
-        .clk(clk),
-        .regwrite(mem_wb_regwrite_out),
-        .rs1(rs1),
-        .rs2(rs2),
-        .rd(mem_wb_rd_out),
-        .writedata(writeback_data),
-        .readdata1(rs1_data),
-        .readdata2(rs2_data),
-        .debug_x5(debug_x5),
-        .debug_x6(debug_x6),
-        .debug_x7(debug_x7)
+        .clk(clk), .reset(reset), .regwrite(mem_wb_regwrite_out),
+        .rs1(rs1), .rs2(rs2), .rd(mem_wb_rd_out),
+        .writedata(writeback_data), .readdata1(rs1_data),
+        .readdata2(rs2_data)
     );
 
-    // ID/EX Pipeline Register
-    wire [31:0] id_ex_pc, id_ex_rs1_data, id_ex_rs2_data, id_ex_imm_i, id_ex_imm_b;
-    wire [4:0] id_ex_rd, id_ex_rs1, id_ex_rs2;
-    wire [2:0] id_ex_funct3;
-    wire [6:0] id_ex_funct7;
-    wire [3:0] id_ex_alu_ctrl;
-    wire id_ex_regwrite, id_ex_memread, id_ex_memwrite, id_ex_memtoreg, id_ex_branch, id_ex_alu_src_imm;
+    hazard_unit u_hazard (
+        .id_ex_memread(id_ex_memread), .id_ex_rd(id_ex_rd),
+        .if_id_rs1(rs1), .if_id_rs2(rs2),
+        .if_id_uses_rs1(uses_rs1), .if_id_uses_rs2(uses_rs2),
+        .pc_write(hazard_pc_write), .if_id_write(if_id_write),
+        .control_stall(control_stall)
+    );
+
+    assign kill_controls = control_stall | branch_taken;
 
     id_ex u_id_ex (
-        .clk(clk),
-        .reset(reset),
-        .pc_in(if_id_pc),
-        .rs1_data_in(rs1_data),
-        .rs2_data_in(rs2_data),
-        .imm_i_in(imm_i),
-        .imm_b_in(imm_b),
-        .rd_in(rd),
-        .rs1_in(rs1),
-        .rs2_in(rs2),
-        .funct3_in(funct3),
-        .funct7_in(funct7),
-        .regwrite_in(regwrite),
-        .memread_in(memread),
-        .memwrite_in(memwrite),
-        .memtoreg_in(memtoreg),
-        .branch_in(branch),
-        .alu_src_imm_in(alu_src_imm),
-        .alu_ctrl_in(alu_ctrl),
-
-        .pc_out(id_ex_pc),
-        .rs1_data_out(id_ex_rs1_data),
-        .rs2_data_out(id_ex_rs2_data),
-        .imm_i_out(id_ex_imm_i),
-        .imm_b_out(id_ex_imm_b),
-        .rd_out(id_ex_rd),
-        .rs1_out(id_ex_rs1),
-        .rs2_out(id_ex_rs2),
+        .clk(clk), .reset(reset), .pc_in(if_id_pc),
+        .rs1_data_in(rs1_data), .rs2_data_in(rs2_data),
+        .imm_i_in(alu_imm), .imm_b_in(imm_b), .rd_in(rd),
+        .rs1_in(rs1), .rs2_in(rs2), .funct3_in(funct3),
+        .regwrite_in(kill_controls ? 1'b0 : regwrite),
+        .memread_in(kill_controls ? 1'b0 : memread),
+        .memwrite_in(kill_controls ? 1'b0 : memwrite),
+        .memtoreg_in(kill_controls ? 1'b0 : memtoreg),
+        .branch_in(kill_controls ? 1'b0 : branch),
+        .alu_src_imm_in(kill_controls ? 1'b0 : alu_src_imm),
+        .alu_ctrl_in(kill_controls ? ALU_ADD : alu_ctrl),
+        .pc_out(id_ex_pc), .rs1_data_out(id_ex_rs1_data),
+        .rs2_data_out(id_ex_rs2_data), .imm_i_out(id_ex_imm_i),
+        .imm_b_out(id_ex_imm_b), .rd_out(id_ex_rd),
+        .rs1_out(id_ex_rs1), .rs2_out(id_ex_rs2),
         .funct3_out(id_ex_funct3),
-        .funct7_out(id_ex_funct7),
-        .regwrite_out(id_ex_regwrite),
-        .memread_out(id_ex_memread),
-        .memwrite_out(id_ex_memwrite),
-        .memtoreg_out(id_ex_memtoreg),
-        .branch_out(id_ex_branch),
-        .alu_src_imm_out(id_ex_alu_src_imm),
+        .regwrite_out(id_ex_regwrite), .memread_out(id_ex_memread),
+        .memwrite_out(id_ex_memwrite), .memtoreg_out(id_ex_memtoreg),
+        .branch_out(id_ex_branch), .alu_src_imm_out(id_ex_alu_src_imm),
         .alu_ctrl_out(id_ex_alu_ctrl)
     );
 
-    // 
-    // stage 3: execute (EX)
-    // 
+    forwarding_unit u_forwarding (
+        .ex_mem_regwrite(ex_mem_regwrite), .ex_mem_memtoreg(ex_mem_memtoreg),
+        .ex_mem_rd(ex_mem_rd), .mem_wb_regwrite(mem_wb_regwrite_out),
+        .mem_wb_rd(mem_wb_rd_out), .id_ex_rs1(id_ex_rs1),
+        .id_ex_rs2(id_ex_rs2), .forward_a(forward_a), .forward_b(forward_b)
+    );
 
-    wire [31:0] alu_b = id_ex_alu_src_imm ? id_ex_imm_i : id_ex_rs2_data;
-    wire [31:0] alu_result;
-    wire alu_zero;
+    always @(*) begin
+        case (forward_a)
+            2'b10: forwarded_rs1 = ex_mem_alu_result;
+            2'b01: forwarded_rs1 = writeback_data;
+            default: forwarded_rs1 = id_ex_rs1_data;
+        endcase
+        case (forward_b)
+            2'b10: forwarded_rs2 = ex_mem_alu_result;
+            2'b01: forwarded_rs2 = writeback_data;
+            default: forwarded_rs2 = id_ex_rs2_data;
+        endcase
+    end
+
+    assign alu_b = id_ex_alu_src_imm ? id_ex_imm_i : forwarded_rs2;
 
     alu u_alu (
-        .A(id_ex_rs1_data),
-        .B(alu_b),
-        .ALUControl(id_ex_alu_ctrl),
-        .Result(alu_result),
-        .Zero(alu_zero)
+        .A(forwarded_rs1), .B(alu_b), .ALUControl(id_ex_alu_ctrl),
+        .Result(alu_result), .Zero()
     );
 
-    wire branch_taken = id_ex_branch &&
-                       ((id_ex_funct3 == 3'b000 && alu_zero) ||      // BEQ
-                        (id_ex_funct3 == 3'b001 && !alu_zero) ||     // BNE
-                        (id_ex_funct3 == 3'b100 && alu_result[0]));  // BLT
+    always @(*) begin
+        case (id_ex_funct3)
+            3'b000: branch_condition = (forwarded_rs1 == forwarded_rs2);
+            3'b001: branch_condition = (forwarded_rs1 != forwarded_rs2);
+            3'b100: branch_condition = ($signed(forwarded_rs1) < $signed(forwarded_rs2));
+            3'b101: branch_condition = ($signed(forwarded_rs1) >= $signed(forwarded_rs2));
+            3'b110: branch_condition = (forwarded_rs1 < forwarded_rs2);
+            3'b111: branch_condition = (forwarded_rs1 >= forwarded_rs2);
+            default: branch_condition = 1'b0;
+        endcase
+    end
 
-    wire [31:0] branch_target = id_ex_pc + id_ex_imm_b;
-
-    // EX/MEM pipeline register
-
-    wire [31:0] ex_mem_alu_result, ex_mem_rs2_data, ex_mem_branch_target;
-    wire [4:0]  ex_mem_rd;
-    wire ex_mem_regwrite, ex_mem_memread, ex_mem_memwrite, ex_mem_memtoreg, ex_mem_branch, ex_mem_branch_taken;
+    assign branch_taken  = id_ex_branch && branch_condition;
+    assign branch_target = id_ex_pc + id_ex_imm_b;
 
     ex_mem u_ex_mem (
-        .clk(clk),
-        .reset(reset),
-        .alu_result_in(alu_result),
-        .rs2_data_in(id_ex_rs2_data),
-        .rd_in(id_ex_rd),
-        .regwrite_in(id_ex_regwrite),
-        .memread_in(id_ex_memread),
-        .memwrite_in(id_ex_memwrite),
-        .memtoreg_in(id_ex_memtoreg),
-        .branch_in(id_ex_branch),
-        .branch_target_in(branch_target),
-        .branch_taken_in(branch_taken),
-
-        .alu_result_out(ex_mem_alu_result),
-        .rs2_data_out(ex_mem_rs2_data),
-        .rd_out(ex_mem_rd),
-        .regwrite_out(ex_mem_regwrite),
-        .memread_out(ex_mem_memread),
-        .memwrite_out(ex_mem_memwrite),
-        .memtoreg_out(ex_mem_memtoreg),
-        .branch_out(ex_mem_branch),
-        .branch_target_out(ex_mem_branch_target),
-        .branch_taken_out(ex_mem_branch_taken)
+        .clk(clk), .reset(reset), .alu_result_in(alu_result),
+        .rs2_data_in(forwarded_rs2), .rd_in(id_ex_rd),
+        .regwrite_in(id_ex_regwrite), .memread_in(id_ex_memread),
+        .memwrite_in(id_ex_memwrite), .memtoreg_in(id_ex_memtoreg),
+        .alu_result_out(ex_mem_alu_result), .rs2_data_out(ex_mem_rs2_data),
+        .rd_out(ex_mem_rd), .regwrite_out(ex_mem_regwrite),
+        .memread_out(ex_mem_memread), .memwrite_out(ex_mem_memwrite),
+        .memtoreg_out(ex_mem_memtoreg)
     );
 
-    // 
-    // stage 4: memory (MEM)
-    // 
-
-    wire [31:0] mem_read_data;
-
     data_mem u_dmem (
-        .clk(clk),
-        .memread(ex_mem_memread),
-        .memwrite(ex_mem_memwrite),
-        .addr(ex_mem_alu_result),
-        .writedata(ex_mem_rs2_data),
+        .clk(clk), .memread(ex_mem_memread), .memwrite(ex_mem_memwrite),
+        .addr(ex_mem_alu_result), .writedata(ex_mem_rs2_data),
         .readdata(mem_read_data)
     );
 
-    // MEM/WB pipeline register
-
-    wire [31:0] mem_wb_read_data_out, mem_wb_alu_result_out;
-    wire [4:0]  mem_wb_rd_out;
-    wire mem_wb_regwrite_out, mem_wb_memtoreg_out;
-
     mem_wb u_mem_wb (
-        .clk(clk),
-        .reset(reset),
-        .read_data_in(mem_read_data),
-        .alu_result_in(ex_mem_alu_result),
-        .rd_in(ex_mem_rd),
-        .regwrite_in(ex_mem_regwrite),
-        .memtoreg_in(ex_mem_memtoreg),
-
+        .clk(clk), .reset(reset), .read_data_in(mem_read_data),
+        .alu_result_in(ex_mem_alu_result), .rd_in(ex_mem_rd),
+        .regwrite_in(ex_mem_regwrite), .memtoreg_in(ex_mem_memtoreg),
         .read_data_out(mem_wb_read_data_out),
-        .alu_result_out(mem_wb_alu_result_out),
-        .rd_out(mem_wb_rd_out),
-        .regwrite_out(mem_wb_regwrite_out),
-        .memtoreg_out(mem_wb_memtoreg_out)
+        .alu_result_out(mem_wb_alu_result_out), .rd_out(mem_wb_rd_out),
+        .regwrite_out(mem_wb_regwrite_out), .memtoreg_out(mem_wb_memtoreg_out)
     );
 
-    // 
-    // stage 5: write back (WB)
-    // 
-
-    wire [31:0] writeback_data = mem_wb_memtoreg_out ?
-                                 mem_wb_read_data_out :
-                                 mem_wb_alu_result_out;
-
+    assign writeback_data = mem_wb_memtoreg_out ?
+                            mem_wb_read_data_out : mem_wb_alu_result_out;
 endmodule
+
+`default_nettype wire

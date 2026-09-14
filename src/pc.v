@@ -1,3 +1,6 @@
+`timescale 1ns / 1ps
+`default_nettype none
+
 module pc (
     input clk,
     input reset,
@@ -13,3 +16,5 @@ module pc (
             pc_out <= pc_in;        // update PC when allowed
     end
 endmodule
+
+`default_nettype wire

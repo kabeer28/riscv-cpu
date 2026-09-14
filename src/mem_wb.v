@@ -1,3 +1,6 @@
+`timescale 1ns / 1ps
+`default_nettype none
+
 module mem_wb (
     input clk,
     input reset,
@@ -35,3 +38,5 @@ module mem_wb (
         end
     end
 endmodule
+
+`default_nettype wire
