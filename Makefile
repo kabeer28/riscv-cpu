@@ -3,9 +3,9 @@ VVP ?= vvp
 BUILD_DIR := build
 SOURCES := $(wildcard src/*.v)
 
-.PHONY: test test-alu test-pc test-core test-upper test-jump test-memory trace lint clean
+.PHONY: test test-alu test-pc test-core test-upper test-jump test-memory test-diff trace lint clean
 
-test: test-alu test-pc test-core test-upper test-jump test-memory
+test: test-alu test-pc test-core test-upper test-jump test-memory test-diff
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -33,6 +33,16 @@ test-jump: | $(BUILD_DIR)
 test-memory: | $(BUILD_DIR)
 	$(IVERILOG) -g2012 -Wall -s tb_memory -o $(BUILD_DIR)/tb_memory $(SOURCES) test/tb_memory.v
 	$(VVP) $(BUILD_DIR)/tb_memory
+
+test-diff: | $(BUILD_DIR)
+	$(IVERILOG) -g2012 -Wall -s tb_diff -o $(BUILD_DIR)/tb_diff $(SOURCES) test/tb_diff.v
+	@for seed in 1 7 19; do \
+		python3 test/gen_diff.py --seed $$seed \
+			--program $(BUILD_DIR)/diff_program.hex \
+			--registers $(BUILD_DIR)/diff_registers.hex \
+			--memory $(BUILD_DIR)/diff_memory.hex; \
+		$(VVP) $(BUILD_DIR)/tb_diff +SEED=$$seed || exit 1; \
+	done
 
 trace: | $(BUILD_DIR)
 	$(IVERILOG) -g2012 -Wall -DTRACE -s tb_top -o $(BUILD_DIR)/tb_trace $(SOURCES) test/tb_top.v

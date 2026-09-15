@@ -39,10 +39,12 @@ Install Icarus Verilog, then run:
 make test
 ```
 
-The tests are self-checking. The processor-level test runs one program that
-covers back-to-back ALU dependencies, forwarded store data, a load-use stall,
-taken and untaken branches, and signed branch comparison. GitHub Actions runs
-the same suite on every push and pull request.
+The tests are self-checking. Directed processor tests cover pipeline hazards,
+control flow, and memory access. A deterministic differential test generates
+programs from several seeds, executes them with an independent architectural
+reference model, and compares every register and data-memory word against the
+pipelined core. GitHub Actions runs the same suite on every push and pull
+request.
 
 Generate a waveform for GTKWave with:
 
@@ -73,7 +75,6 @@ and misaligned stores are suppressed.
 
 ## Remaining work
 
-- Add instruction-level differential tests against a reference model
 - Synthesize and close timing on an FPGA target
 - Add memory-mapped UART output
 - Evaluate a branch predictor only after collecting baseline branch metrics
