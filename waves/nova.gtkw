@@ -1,0 +1,67 @@
+[*]
+[*] NOVA-1 pipeline debug view
+[*]
+[dumpfile] "build/nova_trace.vcd"
+[savefile] "waves/nova.gtkw"
+[timestart] 0
+[size] 1600 900
+[pos] -1 -1
+*-13.000000 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+[treeopen] tb_top.
+[treeopen] tb_top.uut.
+[sst_width] 260
+[signals_width] 260
+[sst_expanded] 1
+@28
+tb_top.uut.clk
+tb_top.uut.reset
+@200
+-PIPELINE
+@22
+tb_top.uut.pc_out[31:0]
+tb_top.uut.if_id_pc[31:0]
+tb_top.uut.if_id_instruction[31:0]
+tb_top.uut.id_ex_pc[31:0]
+tb_top.uut.id_ex_rd[4:0]
+@200
+-HAZARDS AND CONTROL
+@28
+tb_top.uut.control_stall
+tb_top.uut.if_id_write
+tb_top.uut.if_id_flush
+tb_top.uut.kill_controls
+tb_top.uut.branch_taken
+tb_top.uut.redirect_taken
+@22
+tb_top.uut.redirect_target[31:0]
+tb_top.uut.forward_a[1:0]
+tb_top.uut.forward_b[1:0]
+@200
+-EXECUTE
+@22
+tb_top.uut.forwarded_rs1[31:0]
+tb_top.uut.forwarded_rs2[31:0]
+tb_top.uut.alu_a[31:0]
+tb_top.uut.alu_b[31:0]
+tb_top.uut.alu_result[31:0]
+tb_top.uut.execute_result[31:0]
+@200
+-MEMORY
+@28
+tb_top.uut.ex_mem_memread
+tb_top.uut.ex_mem_memwrite
+tb_top.uut.mem_misaligned
+@22
+tb_top.uut.ex_mem_alu_result[31:0]
+tb_top.uut.ex_mem_rs2_data[31:0]
+tb_top.uut.mem_read_data[31:0]
+@200
+-WRITEBACK
+@28
+tb_top.uut.mem_wb_regwrite_out
+tb_top.uut.mem_wb_memtoreg_out
+@22
+tb_top.uut.mem_wb_rd_out[4:0]
+tb_top.uut.writeback_data[31:0]
+[pattern_trace] 1
+[pattern_trace] 0

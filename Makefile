@@ -1,10 +1,11 @@
 IVERILOG ?= iverilog
 VVP ?= vvp
 YOSYS ?= yosys
+GTKWAVE ?= gtkwave
 BUILD_DIR := build
 SOURCES := $(wildcard src/*.v)
 
-.PHONY: test test-alu test-pc test-core test-upper test-jump test-memory test-diff trace lint synth clean
+.PHONY: test test-alu test-pc test-core test-upper test-jump test-memory test-diff trace wave lint synth clean
 
 test: test-alu test-pc test-core test-upper test-jump test-memory test-diff
 
@@ -49,6 +50,9 @@ trace: | $(BUILD_DIR)
 	$(IVERILOG) -g2012 -Wall -DTRACE -s tb_top -o $(BUILD_DIR)/tb_trace $(SOURCES) test/tb_top.v
 	$(VVP) $(BUILD_DIR)/tb_trace
 	@echo "Trace written to $(BUILD_DIR)/nova_trace.vcd"
+
+wave: trace
+	$(GTKWAVE) --dark $(BUILD_DIR)/nova_trace.vcd waves/nova.gtkw
 
 lint:
 	verilator --lint-only --Wall -Wno-fatal -Wno-PINCONNECTEMPTY \

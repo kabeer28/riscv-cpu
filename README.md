@@ -50,8 +50,19 @@ Generate a waveform for GTKWave with:
 
 ```bash
 make trace
-gtkwave build/nova_trace.vcd
+gtkwave --dark build/nova_trace.vcd waves/nova.gtkw
 ```
+
+Or generate the trace and open the curated pipeline view in one command:
+
+```bash
+make wave
+```
+
+The most useful write-up captures are forwarding around cycles 5-6, the
+load-use stall around cycles 7-9, and taken-branch recovery around cycles
+10-11. The preset groups pipeline state, hazards, execution, memory, and
+writeback signals so each mechanism can be explained from one trace.
 
 ## Synthesis
 
