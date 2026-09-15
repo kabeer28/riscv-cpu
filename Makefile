@@ -3,9 +3,9 @@ VVP ?= vvp
 BUILD_DIR := build
 SOURCES := $(wildcard src/*.v)
 
-.PHONY: test test-alu test-pc test-core test-upper test-jump trace lint clean
+.PHONY: test test-alu test-pc test-core test-upper test-jump test-memory trace lint clean
 
-test: test-alu test-pc test-core test-upper test-jump
+test: test-alu test-pc test-core test-upper test-jump test-memory
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -29,6 +29,10 @@ test-upper: | $(BUILD_DIR)
 test-jump: | $(BUILD_DIR)
 	$(IVERILOG) -g2012 -Wall -s tb_jump -o $(BUILD_DIR)/tb_jump $(SOURCES) test/tb_jump.v
 	$(VVP) $(BUILD_DIR)/tb_jump
+
+test-memory: | $(BUILD_DIR)
+	$(IVERILOG) -g2012 -Wall -s tb_memory -o $(BUILD_DIR)/tb_memory $(SOURCES) test/tb_memory.v
+	$(VVP) $(BUILD_DIR)/tb_memory
 
 trace: | $(BUILD_DIR)
 	$(IVERILOG) -g2012 -Wall -DTRACE -s tb_top -o $(BUILD_DIR)/tb_trace $(SOURCES) test/tb_top.v

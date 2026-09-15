@@ -8,6 +8,7 @@ module ex_mem (
     input wire memread_in,
     input wire memwrite_in,
     input wire memtoreg_in,
+    input wire [2:0] funct3_in,
     input wire [31:0] alu_result_in,
     input wire [31:0] rs2_data_in,
     input wire [4:0] rd_in,
@@ -15,6 +16,7 @@ module ex_mem (
     output reg memread_out,
     output reg memwrite_out,
     output reg memtoreg_out,
+    output reg [2:0] funct3_out,
     output reg [31:0] alu_result_out,
     output reg [31:0] rs2_data_out,
     output reg [4:0] rd_out
@@ -25,6 +27,7 @@ module ex_mem (
             memread_out <= 1'b0;
             memwrite_out <= 1'b0;
             memtoreg_out <= 1'b0;
+            funct3_out <= 3'b0;
             alu_result_out <= 32'b0;
             rs2_data_out <= 32'b0;
             rd_out <= 5'b0;
@@ -33,6 +36,7 @@ module ex_mem (
             memread_out <= memread_in;
             memwrite_out <= memwrite_in;
             memtoreg_out <= memtoreg_in;
+            funct3_out <= funct3_in;
             alu_result_out <= alu_result_in;
             rs2_data_out <= rs2_data_in;
             rd_out <= rd_in;

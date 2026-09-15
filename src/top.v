@@ -67,8 +67,10 @@ module top #(
 
     wire [31:0] ex_mem_alu_result, ex_mem_rs2_data;
     wire [4:0] ex_mem_rd;
+    wire [2:0] ex_mem_funct3;
     wire ex_mem_regwrite, ex_mem_memread, ex_mem_memwrite, ex_mem_memtoreg;
     wire [31:0] mem_read_data;
+    wire mem_misaligned;
 
     wire [31:0] mem_wb_read_data_out, mem_wb_alu_result_out;
     wire [4:0] mem_wb_rd_out;
@@ -171,20 +173,26 @@ module top #(
             end
             LOAD: begin
                 uses_rs1 = 1'b1;
-                if (funct3 == 3'b010) begin
-                    regwrite = 1'b1;
-                    memread = 1'b1;
-                    memtoreg = 1'b1;
-                    alu_src_imm = 1'b1;
-                end
+                case (funct3)
+                    3'b000, 3'b001, 3'b010, 3'b100, 3'b101: begin
+                        regwrite = 1'b1;
+                        memread = 1'b1;
+                        memtoreg = 1'b1;
+                        alu_src_imm = 1'b1;
+                    end
+                    default: begin end
+                endcase
             end
             STORE: begin
                 uses_rs1 = 1'b1;
                 uses_rs2 = 1'b1;
-                if (funct3 == 3'b010) begin
-                    memwrite = 1'b1;
-                    alu_src_imm = 1'b1;
-                end
+                case (funct3)
+                    3'b000, 3'b001, 3'b010: begin
+                        memwrite = 1'b1;
+                        alu_src_imm = 1'b1;
+                    end
+                    default: begin end
+                endcase
             end
             BRANCH: begin
                 uses_rs1 = 1'b1;
@@ -325,9 +333,11 @@ module top #(
     ex_mem u_ex_mem (
         .clk(clk), .reset(reset), .alu_result_in(execute_result),
         .rs2_data_in(forwarded_rs2), .rd_in(id_ex_rd),
+        .funct3_in(id_ex_funct3),
         .regwrite_in(id_ex_regwrite), .memread_in(id_ex_memread),
         .memwrite_in(id_ex_memwrite), .memtoreg_in(id_ex_memtoreg),
         .alu_result_out(ex_mem_alu_result), .rs2_data_out(ex_mem_rs2_data),
+        .funct3_out(ex_mem_funct3),
         .rd_out(ex_mem_rd), .regwrite_out(ex_mem_regwrite),
         .memread_out(ex_mem_memread), .memwrite_out(ex_mem_memwrite),
         .memtoreg_out(ex_mem_memtoreg)
@@ -335,8 +345,9 @@ module top #(
 
     data_mem u_dmem (
         .clk(clk), .memread(ex_mem_memread), .memwrite(ex_mem_memwrite),
-        .addr(ex_mem_alu_result), .writedata(ex_mem_rs2_data),
-        .readdata(mem_read_data)
+        .funct3(ex_mem_funct3), .addr(ex_mem_alu_result),
+        .writedata(ex_mem_rs2_data), .readdata(mem_read_data),
+        .misaligned(mem_misaligned)
     );
 
     mem_wb u_mem_wb (

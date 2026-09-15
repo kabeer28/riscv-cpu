@@ -25,7 +25,7 @@ IF -> ID -> EX -> MEM -> WB
 | Immediate ALU | `ADDI`, `SLLI`, `SLTI`, `SLTIU`, `XORI`, `SRLI`, `SRAI`, `ORI`, `ANDI` |
 | Upper immediate | `LUI`, `AUIPC` |
 | Jump | `JAL`, `JALR` |
-| Memory | `LW`, `SW` |
+| Memory | `LB`, `LH`, `LW`, `LBU`, `LHU`, `SB`, `SH`, `SW` |
 | Branch | `BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, `BGEU` |
 
 Unsupported encodings have no architectural side effects. The core does not yet
@@ -65,9 +65,14 @@ top #(.IMEM_FILE("program.hex")) cpu (
 
 When no file is supplied, instruction memory is initialized with RISC-V NOPs.
 
+## Memory behavior
+
+Halfword accesses must be two-byte aligned and word accesses must be four-byte
+aligned. Until architectural traps are implemented, misaligned loads return zero
+and misaligned stores are suppressed.
+
 ## Remaining work
 
-- Complete RV32I byte and halfword memory operations
 - Add instruction-level differential tests against a reference model
 - Synthesize and close timing on an FPGA target
 - Add memory-mapped UART output
