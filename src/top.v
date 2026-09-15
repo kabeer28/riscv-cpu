@@ -14,6 +14,8 @@ module top #(
     localparam BRANCH = 7'b1100011;
     localparam LUI    = 7'b0110111;
     localparam AUIPC  = 7'b0010111;
+    localparam JAL    = 7'b1101111;
+    localparam JALR   = 7'b1100111;
 
     localparam ALU_AND  = 4'b0000;
     localparam ALU_OR   = 4'b0001;
@@ -37,9 +39,10 @@ module top #(
     wire [6:0] opcode, funct7;
     wire [4:0] rd, rs1, rs2;
     wire [2:0] funct3;
-    wire [31:0] imm_i, imm_s, imm_b, imm_u, alu_imm;
+    wire [31:0] imm_i, imm_s, imm_b, imm_u, imm_j, alu_imm, control_imm;
     wire [31:0] rs1_data, rs2_data;
-    reg regwrite, memread, memwrite, memtoreg, branch, alu_src_imm;
+    reg regwrite, memread, memwrite, memtoreg, branch, jump, jump_reg;
+    reg alu_src_imm;
     reg [3:0] alu_ctrl;
     reg [1:0] alu_a_sel;
     reg uses_rs1, uses_rs2;
@@ -52,14 +55,15 @@ module top #(
     wire [3:0] id_ex_alu_ctrl;
     wire [1:0] id_ex_alu_a_sel;
     wire id_ex_regwrite, id_ex_memread, id_ex_memwrite;
-    wire id_ex_memtoreg, id_ex_branch, id_ex_alu_src_imm;
+    wire id_ex_memtoreg, id_ex_branch, id_ex_jump, id_ex_jump_reg;
+    wire id_ex_alu_src_imm;
     wire [1:0] forward_a, forward_b;
     reg [31:0] forwarded_rs1, forwarded_rs2;
     reg [31:0] alu_a;
-    wire [31:0] alu_b, alu_result;
+    wire [31:0] alu_b, alu_result, execute_result;
     reg branch_condition;
-    wire branch_taken;
-    wire [31:0] branch_target;
+    wire branch_taken, redirect_taken;
+    wire [31:0] branch_target, jump_target, redirect_target;
 
     wire [31:0] ex_mem_alu_result, ex_mem_rs2_data;
     wire [4:0] ex_mem_rd;
@@ -72,9 +76,9 @@ module top #(
     wire [31:0] writeback_data;
 
     assign pc_plus4    = pc_out + 32'd4;
-    assign pc_next     = branch_taken ? branch_target : pc_plus4;
-    assign pc_write    = hazard_pc_write | branch_taken;
-    assign if_id_flush = branch_taken;
+    assign pc_next     = redirect_taken ? redirect_target : pc_plus4;
+    assign pc_write    = hazard_pc_write | redirect_taken;
+    assign if_id_flush = redirect_taken;
 
     pc u_pc (
         .clk(clk), .reset(reset), .pc_write(pc_write),
@@ -105,8 +109,12 @@ module top #(
                       if_id_instruction[7], if_id_instruction[30:25],
                       if_id_instruction[11:8], 1'b0};
     assign imm_u   = {if_id_instruction[31:12], 12'b0};
+    assign imm_j   = {{11{if_id_instruction[31]}}, if_id_instruction[31],
+                      if_id_instruction[19:12], if_id_instruction[20],
+                      if_id_instruction[30:21], 1'b0};
     assign alu_imm = ((opcode == LUI) || (opcode == AUIPC)) ? imm_u :
                      (opcode == STORE) ? imm_s : imm_i;
+    assign control_imm = (opcode == JAL) ? imm_j : imm_b;
 
     always @(*) begin
         regwrite = 1'b0;
@@ -114,6 +122,8 @@ module top #(
         memwrite = 1'b0;
         memtoreg = 1'b0;
         branch = 1'b0;
+        jump = 1'b0;
+        jump_reg = 1'b0;
         alu_src_imm = 1'b0;
         alu_ctrl = ALU_ADD;
         alu_a_sel = ALU_A_RS1;
@@ -194,6 +204,19 @@ module top #(
                 alu_src_imm = 1'b1;
                 alu_a_sel = ALU_A_PC;
             end
+            JAL: begin
+                regwrite = 1'b1;
+                jump = 1'b1;
+            end
+            JALR: begin
+                uses_rs1 = 1'b1;
+                if (funct3 == 3'b000) begin
+                    regwrite = 1'b1;
+                    jump = 1'b1;
+                    jump_reg = 1'b1;
+                    alu_src_imm = 1'b1;
+                end
+            end
             default: begin end
         endcase
     end
@@ -213,18 +236,20 @@ module top #(
         .control_stall(control_stall)
     );
 
-    assign kill_controls = control_stall | branch_taken;
+    assign kill_controls = control_stall | redirect_taken;
 
     id_ex u_id_ex (
         .clk(clk), .reset(reset), .pc_in(if_id_pc),
         .rs1_data_in(rs1_data), .rs2_data_in(rs2_data),
-        .imm_i_in(alu_imm), .imm_b_in(imm_b), .rd_in(rd),
+        .imm_i_in(alu_imm), .imm_b_in(control_imm), .rd_in(rd),
         .rs1_in(rs1), .rs2_in(rs2), .funct3_in(funct3),
         .regwrite_in(kill_controls ? 1'b0 : regwrite),
         .memread_in(kill_controls ? 1'b0 : memread),
         .memwrite_in(kill_controls ? 1'b0 : memwrite),
         .memtoreg_in(kill_controls ? 1'b0 : memtoreg),
         .branch_in(kill_controls ? 1'b0 : branch),
+        .jump_in(kill_controls ? 1'b0 : jump),
+        .jump_reg_in(kill_controls ? 1'b0 : jump_reg),
         .alu_src_imm_in(kill_controls ? 1'b0 : alu_src_imm),
         .alu_a_sel_in(kill_controls ? ALU_A_RS1 : alu_a_sel),
         .alu_ctrl_in(kill_controls ? ALU_ADD : alu_ctrl),
@@ -235,7 +260,8 @@ module top #(
         .funct3_out(id_ex_funct3),
         .regwrite_out(id_ex_regwrite), .memread_out(id_ex_memread),
         .memwrite_out(id_ex_memwrite), .memtoreg_out(id_ex_memtoreg),
-        .branch_out(id_ex_branch), .alu_src_imm_out(id_ex_alu_src_imm),
+        .branch_out(id_ex_branch), .jump_out(id_ex_jump),
+        .jump_reg_out(id_ex_jump_reg), .alu_src_imm_out(id_ex_alu_src_imm),
         .alu_a_sel_out(id_ex_alu_a_sel),
         .alu_ctrl_out(id_ex_alu_ctrl)
     );
@@ -289,9 +315,15 @@ module top #(
 
     assign branch_taken  = id_ex_branch && branch_condition;
     assign branch_target = id_ex_pc + id_ex_imm_b;
+    assign jump_target = id_ex_jump_reg ?
+                         ((forwarded_rs1 + id_ex_imm_i) & 32'hfffffffe) :
+                         (id_ex_pc + id_ex_imm_b);
+    assign redirect_taken = branch_taken | id_ex_jump;
+    assign redirect_target = id_ex_jump ? jump_target : branch_target;
+    assign execute_result = id_ex_jump ? (id_ex_pc + 32'd4) : alu_result;
 
     ex_mem u_ex_mem (
-        .clk(clk), .reset(reset), .alu_result_in(alu_result),
+        .clk(clk), .reset(reset), .alu_result_in(execute_result),
         .rs2_data_in(forwarded_rs2), .rd_in(id_ex_rd),
         .regwrite_in(id_ex_regwrite), .memread_in(id_ex_memread),
         .memwrite_in(id_ex_memwrite), .memtoreg_in(id_ex_memtoreg),

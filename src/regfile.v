@@ -16,8 +16,12 @@ module regfile (
     integer i;
 
     // Read (combinational)
-    assign readdata1 = (rs1 == 0) ? 32'd0 : registers[rs1];
-    assign readdata2 = (rs2 == 0) ? 32'd0 : registers[rs2];
+    assign readdata1 = (rs1 == 0) ? 32'd0 :
+                       (regwrite && (rd != 0) && (rd == rs1)) ? writedata :
+                       registers[rs1];
+    assign readdata2 = (rs2 == 0) ? 32'd0 :
+                       (regwrite && (rd != 0) && (rd == rs2)) ? writedata :
+                       registers[rs2];
     // Write (synchronous)
     always @(posedge clk or posedge reset) begin
         if (reset) begin

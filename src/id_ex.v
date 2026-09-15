@@ -8,6 +8,8 @@ module id_ex (
     //control signals
     input regwrite_in,
     input branch_in,
+    input jump_in,
+    input jump_reg_in,
     input memread_in,
     input memwrite_in,
     input memtoreg_in,
@@ -29,6 +31,8 @@ module id_ex (
     //outputs
     output reg regwrite_out,
     output reg branch_out,
+    output reg jump_out,
+    output reg jump_reg_out,
     output reg memread_out,
     output reg memwrite_out,
     output reg memtoreg_out,
@@ -51,6 +55,8 @@ module id_ex (
         if (reset) begin
             regwrite_out   <= 0;
             branch_out     <= 0;
+            jump_out       <= 0;
+            jump_reg_out   <= 0;
             memread_out    <= 0;
             memwrite_out   <= 0;
             memtoreg_out   <= 0;
@@ -70,6 +76,8 @@ module id_ex (
         end else begin
             regwrite_out   <= regwrite_in;
             branch_out     <= branch_in;
+            jump_out       <= jump_in;
+            jump_reg_out   <= jump_reg_in;
             memread_out    <= memread_in;
             memwrite_out   <= memwrite_in;
             memtoreg_out   <= memtoreg_in;

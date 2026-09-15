@@ -24,6 +24,7 @@ IF -> ID -> EX -> MEM -> WB
 | Register ALU | `ADD`, `SUB`, `SLL`, `SLT`, `SLTU`, `XOR`, `SRL`, `SRA`, `OR`, `AND` |
 | Immediate ALU | `ADDI`, `SLLI`, `SLTI`, `SLTIU`, `XORI`, `SRLI`, `SRAI`, `ORI`, `ANDI` |
 | Upper immediate | `LUI`, `AUIPC` |
+| Jump | `JAL`, `JALR` |
 | Memory | `LW`, `SW` |
 | Branch | `BEQ`, `BNE`, `BLT`, `BGE`, `BLTU`, `BGEU` |
 
@@ -66,7 +67,7 @@ When no file is supplied, instruction memory is initialized with RISC-V NOPs.
 
 ## Remaining work
 
-- Complete RV32I with `JAL`, `JALR`, and byte/halfword memory operations
+- Complete RV32I byte and halfword memory operations
 - Add instruction-level differential tests against a reference model
 - Synthesize and close timing on an FPGA target
 - Add memory-mapped UART output
