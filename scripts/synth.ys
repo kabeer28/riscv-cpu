@@ -1,0 +1,12 @@
+read_verilog src/*.v
+hierarchy -check -top top
+
+# Keep the internally connected core observable during generic synthesis.
+select -module top
+setattr -set keep 1 c:*
+select -clear
+
+synth -top top -noabc
+check -assert -nolatches
+tee -o build/synth.stat stat
+write_json build/nova1.json

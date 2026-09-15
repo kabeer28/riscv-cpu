@@ -53,6 +53,19 @@ make trace
 gtkwave build/nova_trace.vcd
 ```
 
+## Synthesis
+
+Run a generic Yosys synthesis check with:
+
+```bash
+make synth
+```
+
+This elaborates the complete hierarchy, rejects inferred latches and structural
+connectivity errors, and writes the generic netlist and resource report under
+`build/`. Board-specific timing analysis still requires a selected FPGA,
+pinout, clock constraint, and vendor flow.
+
 ## Loading a program
 
 `top` and `instr_mem` accept a memory-file parameter. Pass a RARS-generated
@@ -75,7 +88,7 @@ and misaligned stores are suppressed.
 
 ## Remaining work
 
-- Synthesize and close timing on an FPGA target
+- Select an FPGA target and add board-specific timing constraints
 - Add memory-mapped UART output
 - Evaluate a branch predictor only after collecting baseline branch metrics
 

@@ -1,9 +1,10 @@
 IVERILOG ?= iverilog
 VVP ?= vvp
+YOSYS ?= yosys
 BUILD_DIR := build
 SOURCES := $(wildcard src/*.v)
 
-.PHONY: test test-alu test-pc test-core test-upper test-jump test-memory test-diff trace lint clean
+.PHONY: test test-alu test-pc test-core test-upper test-jump test-memory test-diff trace lint synth clean
 
 test: test-alu test-pc test-core test-upper test-jump test-memory test-diff
 
@@ -52,6 +53,10 @@ trace: | $(BUILD_DIR)
 lint:
 	verilator --lint-only --Wall -Wno-fatal -Wno-PINCONNECTEMPTY \
 		-Wno-UNUSEDSIGNAL $(SOURCES)
+
+synth: | $(BUILD_DIR)
+	$(YOSYS) -q -l $(BUILD_DIR)/synth.log -s scripts/synth.ys
+	@tail -45 $(BUILD_DIR)/synth.stat
 
 clean:
 	rm -rf $(BUILD_DIR) wave.vcd
