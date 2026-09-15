@@ -3,9 +3,9 @@ VVP ?= vvp
 BUILD_DIR := build
 SOURCES := $(wildcard src/*.v)
 
-.PHONY: test test-alu test-pc test-core trace lint clean
+.PHONY: test test-alu test-pc test-core test-upper trace lint clean
 
-test: test-alu test-pc test-core
+test: test-alu test-pc test-core test-upper
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -21,6 +21,10 @@ test-pc: | $(BUILD_DIR)
 test-core: | $(BUILD_DIR)
 	$(IVERILOG) -g2012 -Wall -s tb_top -o $(BUILD_DIR)/tb_top $(SOURCES) test/tb_top.v
 	$(VVP) $(BUILD_DIR)/tb_top
+
+test-upper: | $(BUILD_DIR)
+	$(IVERILOG) -g2012 -Wall -s tb_upper -o $(BUILD_DIR)/tb_upper $(SOURCES) test/tb_upper.v
+	$(VVP) $(BUILD_DIR)/tb_upper
 
 trace: | $(BUILD_DIR)
 	$(IVERILOG) -g2012 -Wall -DTRACE -s tb_top -o $(BUILD_DIR)/tb_trace $(SOURCES) test/tb_top.v

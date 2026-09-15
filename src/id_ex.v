@@ -12,6 +12,7 @@ module id_ex (
     input memwrite_in,
     input memtoreg_in,
     input alu_src_imm_in,
+    input [1:0] alu_a_sel_in,
 
     //data signals
     input [31:0] pc_in,
@@ -32,6 +33,7 @@ module id_ex (
     output reg memwrite_out,
     output reg memtoreg_out,
     output reg alu_src_imm_out,
+    output reg [1:0] alu_a_sel_out,
 
     output reg [31:0] pc_out,
     output reg [31:0] rs1_data_out,
@@ -53,6 +55,7 @@ module id_ex (
             memwrite_out   <= 0;
             memtoreg_out   <= 0;
             alu_src_imm_out<= 0;
+            alu_a_sel_out  <= 0;
 
             pc_out         <= 0;
             rs1_data_out   <= 0;
@@ -71,6 +74,7 @@ module id_ex (
             memwrite_out   <= memwrite_in;
             memtoreg_out   <= memtoreg_in;
             alu_src_imm_out<= alu_src_imm_in;
+            alu_a_sel_out  <= alu_a_sel_in;
 
             pc_out         <= pc_in;
             rs1_data_out   <= rs1_data_in;

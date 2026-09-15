@@ -12,6 +12,8 @@ module top #(
     localparam LOAD   = 7'b0000011;
     localparam STORE  = 7'b0100011;
     localparam BRANCH = 7'b1100011;
+    localparam LUI    = 7'b0110111;
+    localparam AUIPC  = 7'b0010111;
 
     localparam ALU_AND  = 4'b0000;
     localparam ALU_OR   = 4'b0001;
@@ -24,6 +26,10 @@ module top #(
     localparam ALU_SRA  = 4'b1011;
     localparam ALU_SLTU = 4'b1100;
 
+    localparam ALU_A_RS1  = 2'b00;
+    localparam ALU_A_PC   = 2'b01;
+    localparam ALU_A_ZERO = 2'b10;
+
     wire [31:0] pc_out, pc_plus4, pc_next, instruction;
     wire hazard_pc_write, pc_write, if_id_write, if_id_flush;
 
@@ -31,10 +37,11 @@ module top #(
     wire [6:0] opcode, funct7;
     wire [4:0] rd, rs1, rs2;
     wire [2:0] funct3;
-    wire [31:0] imm_i, imm_s, imm_b, alu_imm;
+    wire [31:0] imm_i, imm_s, imm_b, imm_u, alu_imm;
     wire [31:0] rs1_data, rs2_data;
     reg regwrite, memread, memwrite, memtoreg, branch, alu_src_imm;
     reg [3:0] alu_ctrl;
+    reg [1:0] alu_a_sel;
     reg uses_rs1, uses_rs2;
     wire control_stall, kill_controls;
 
@@ -43,10 +50,12 @@ module top #(
     wire [4:0] id_ex_rd, id_ex_rs1, id_ex_rs2;
     wire [2:0] id_ex_funct3;
     wire [3:0] id_ex_alu_ctrl;
+    wire [1:0] id_ex_alu_a_sel;
     wire id_ex_regwrite, id_ex_memread, id_ex_memwrite;
     wire id_ex_memtoreg, id_ex_branch, id_ex_alu_src_imm;
     wire [1:0] forward_a, forward_b;
     reg [31:0] forwarded_rs1, forwarded_rs2;
+    reg [31:0] alu_a;
     wire [31:0] alu_b, alu_result;
     reg branch_condition;
     wire branch_taken;
@@ -95,7 +104,9 @@ module top #(
     assign imm_b   = {{19{if_id_instruction[31]}}, if_id_instruction[31],
                       if_id_instruction[7], if_id_instruction[30:25],
                       if_id_instruction[11:8], 1'b0};
-    assign alu_imm = (opcode == STORE) ? imm_s : imm_i;
+    assign imm_u   = {if_id_instruction[31:12], 12'b0};
+    assign alu_imm = ((opcode == LUI) || (opcode == AUIPC)) ? imm_u :
+                     (opcode == STORE) ? imm_s : imm_i;
 
     always @(*) begin
         regwrite = 1'b0;
@@ -105,6 +116,7 @@ module top #(
         branch = 1'b0;
         alu_src_imm = 1'b0;
         alu_ctrl = ALU_ADD;
+        alu_a_sel = ALU_A_RS1;
         uses_rs1 = 1'b0;
         uses_rs2 = 1'b0;
 
@@ -172,6 +184,16 @@ module top #(
                     default: branch = 1'b0;
                 endcase
             end
+            LUI: begin
+                regwrite = 1'b1;
+                alu_src_imm = 1'b1;
+                alu_a_sel = ALU_A_ZERO;
+            end
+            AUIPC: begin
+                regwrite = 1'b1;
+                alu_src_imm = 1'b1;
+                alu_a_sel = ALU_A_PC;
+            end
             default: begin end
         endcase
     end
@@ -204,6 +226,7 @@ module top #(
         .memtoreg_in(kill_controls ? 1'b0 : memtoreg),
         .branch_in(kill_controls ? 1'b0 : branch),
         .alu_src_imm_in(kill_controls ? 1'b0 : alu_src_imm),
+        .alu_a_sel_in(kill_controls ? ALU_A_RS1 : alu_a_sel),
         .alu_ctrl_in(kill_controls ? ALU_ADD : alu_ctrl),
         .pc_out(id_ex_pc), .rs1_data_out(id_ex_rs1_data),
         .rs2_data_out(id_ex_rs2_data), .imm_i_out(id_ex_imm_i),
@@ -213,6 +236,7 @@ module top #(
         .regwrite_out(id_ex_regwrite), .memread_out(id_ex_memread),
         .memwrite_out(id_ex_memwrite), .memtoreg_out(id_ex_memtoreg),
         .branch_out(id_ex_branch), .alu_src_imm_out(id_ex_alu_src_imm),
+        .alu_a_sel_out(id_ex_alu_a_sel),
         .alu_ctrl_out(id_ex_alu_ctrl)
     );
 
@@ -236,10 +260,18 @@ module top #(
         endcase
     end
 
+    always @(*) begin
+        case (id_ex_alu_a_sel)
+            ALU_A_PC: alu_a = id_ex_pc;
+            ALU_A_ZERO: alu_a = 32'b0;
+            default: alu_a = forwarded_rs1;
+        endcase
+    end
+
     assign alu_b = id_ex_alu_src_imm ? id_ex_imm_i : forwarded_rs2;
 
     alu u_alu (
-        .A(forwarded_rs1), .B(alu_b), .ALUControl(id_ex_alu_ctrl),
+        .A(alu_a), .B(alu_b), .ALUControl(id_ex_alu_ctrl),
         .Result(alu_result), .Zero()
     );
 
